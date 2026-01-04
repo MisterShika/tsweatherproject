@@ -1,29 +1,29 @@
-# Stage 1: Install dependencies
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+# Use Node 22
+FROM node:22
 
-# Stage 2: Build app
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
+# Create a non-root user
+RUN useradd -ms /bin/sh -u 1001 app
 
-# Stage 3: Production image
-FROM node:20-alpine AS runner
+# Set working directory
 WORKDIR /app
-ENV NODE_ENV=production
 
-# Copy necessary files
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+# Copy package.json first
+COPY package.json package-lock.json* ./
+
+# Ensure the app user owns these files
+RUN chown -R app:app /app
+
+# Switch to app user
+USER app
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the source code and set ownership
+COPY --chown=app:app . .
 
 # Expose port
 EXPOSE 3000
 
-# Start Next.js, binding to all interfaces
-CMD ["npx", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
+# Run Next.js dev server
+CMD ["npm", "run", "dev"]
